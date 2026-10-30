@@ -36,10 +36,15 @@ def tokens(text):
     for w in re.findall(r"[a-z0-9]+", text.lower()):
         if w in STOPWORDS:
             continue
-        for suffix in ("ing", "ed", "es", "s"):  # crude stemming: "reducing" ~ "reduce"
-            if len(w) > len(suffix) + 3 and w.endswith(suffix):
-                w = w[: -len(suffix)]
-                break
+        if w.endswith("ies") and len(w) > 4:
+            w = w[:-3] + "y"  # proxies -> proxy
+        else:
+            for suffix in ("ing", "ed", "es", "s"):
+                if len(w) > len(suffix) + 3 and w.endswith(suffix):
+                    w = w[: -len(suffix)]
+                    break
+        if len(w) > 4 and w.endswith("e"):
+            w = w[:-1]  # reduce ~ reducing, service ~ services
         out.append(w)
     return out
 
