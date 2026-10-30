@@ -5,30 +5,45 @@ description: Check whether a blog topic or keyword is already covered by a publi
 
 # Topic cannibalization check
 
-Vets blog topic ideas against the site's already-published posts using `cannibalization.py` at the repo root (standard library only).
+Two posts cannibalize each other only when they would compete for the same query. Sharing a few words is not enough: "mobile proxies for AI data collection" and "mobile proxies vs residential proxies" both contain "mobile proxies" but are different topics with different keywords and intent.
+
+So the analysis is a judgment on three dimensions, not a similarity score. `cannibalization.py` (repo root, standard library only) only builds the shortlist of candidates to judge.
 
 ## Steps
 
-1. **Make sure the index is current.**
-   - If `index.json` does not exist, or the user says they have published recently, run:
+1. **Pin down the new post.** Unless the user gives a separate keyword, treat their topic as both the topic and the primary keyword. Infer the search intent from the keyword: informational (how/why/what), commercial (best/vs/review/pricing), transactional, or navigational. If the intent is genuinely ambiguous, state your assumption.
+
+2. **Make sure the index is current.**
+   - If `index.json` doesn't exist, or the user has published recently, run:
      ```bash
      python cannibalization.py sync <sitemap-url> --filter <blog-path>
      ```
-   - If you don't know the sitemap URL or blog path (for example `/blog/`), ask the user once. Do not guess them.
+   - If you don't know the sitemap URL or blog path, ask once. Don't guess.
 
-2. **Check each topic.** Run once per topic (for a list, run them all in parallel):
+3. **Shortlist candidates.**
    ```bash
-   python cannibalization.py check "<topic>" --top 5
+   python cannibalization.py check "<topic>" --top 8 --details
    ```
+   The score is word overlap only and can be wrong in both directions. Also search `index.json` for the topic's distinctive terms and synonyms (for example grep titles and headings) so a relevant post with different wording isn't missed. Ignore generic terms ("proxies", "data collection", "best", "guide") when deciding what counts as distinctive.
 
-3. **Interpret the verdict** and tell the user in plain language:
-   - **DUPLICATE** (score >= 0.65): recommend against writing it. Name the existing post and link its URL. Suggest refreshing that post instead.
-   - **OVERLAPPING** (0.40-0.65): read the matching post's title and headings. Either propose a clearly different angle (different audience, intent, or sub-topic) or recommend updating the existing post. Explain what differs.
-   - **SAFE** (< 0.40): green light, but mention the closest post as a possible internal link.
+4. **Judge each plausible candidate on three dimensions.** Use its title, H1, headings and description; fetch the page if those aren't enough. Rate each dimension Match, Partial or No:
+   - **Keyword:** Does the existing post target the same primary keyword, or a close variant or synonym? Infer its primary keyword from the slug, title and H1. Shared generic words don't count; the distinctive terms must line up (for example "mobile" + "AI data collection" together).
+   - **Topic:** Is the existing post primarily about the same subject and angle, in depth? A section or passing mention inside a broader post does not make it the same topic.
+   - **Intent:** Would the same searcher be satisfied by either post? A "best providers" roundup, a "vs" comparison, a how-to and a definition serve different intents even on related subjects.
 
-4. **For a list of topics**, summarise as a table: topic, verdict, closest existing post, recommendation. Put safe topics first.
+5. **Give the verdict from the combination:**
+   - **Cannibalization risk: High**: keyword, topic and intent all Match (or keyword + intent Match). Recommend not writing it; update the existing post instead.
+   - **Partial overlap**: two dimensions Match or Partial but one clearly differs. Say which dimension differs and propose how to widen the gap (distinct primary keyword, narrower angle, different intent), or recommend refreshing the existing post if the gap is too small.
+   - **No cannibalization**: at most one dimension overlaps. Green light; mention the candidates as internal-link targets.
 
-## Caveats to state when relevant
+## Output
 
-- Matching is based on shared words, not meaning. Synonyms (for example "churn" vs "customer attrition") can be missed, so use judgment on a SAFE result when a topic is obviously the same idea as a listed title.
-- Only published posts in the sitemap are covered, not drafts or planned topics.
+- For the topic, list only the candidates you judged plausible, each as: URL, then Keyword / Topic / Intent with Match, Partial or No and a few words of reasoning.
+- Dismiss the rest of the shortlist in one line, naming why (for example "different topic: comparison of proxy types").
+- End with the overall verdict and the recommended action.
+- For a list of topics, add a summary table: topic, verdict, closest existing post, action. Put clear topics first.
+
+## Caveats
+
+- Only published posts in the sitemap are covered, not drafts or planned topics, and only the folder you synced (for example `/blog/`). Say so if other sections (use cases, landing pages) could target the same keyword.
+- Don't treat the script's score as a verdict. Never call a topic a duplicate on word overlap alone.

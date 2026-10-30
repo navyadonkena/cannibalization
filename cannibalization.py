@@ -5,7 +5,9 @@
     python cannibalization.py check "how to reduce churn in saas"
 
 `sync` crawls the sitemap and stores each post's title, headings and description
-in index.json. `check` scores a topic against that index (no network needed).
+in index.json. `check` shortlists the posts whose wording is closest to a topic
+(no network needed). It does not decide cannibalization: that is a judgment on
+keyword, topic and intent overlap, done per candidate (see the skill).
 Standard library only.
 """
 import argparse
@@ -21,7 +23,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 INDEX_FILE = Path(__file__).with_name("index.json")
-DUPLICATE, OVERLAP = 0.65, 0.40
 
 STOPWORDS = set(
     "a an and are as at be by for from how in into is it of on or that the this to "
@@ -150,13 +151,17 @@ def cmd_check(args):
         sys.exit("No index found. Run `sync` first.")
     posts = json.loads(INDEX_FILE.read_text())
     ranked = score_topic(args.topic, posts)[: args.top]
-    best = ranked[0][0] if ranked else 0
-    verdict = ("DUPLICATE - do not write this" if best >= DUPLICATE else
-               "OVERLAPPING - differentiate the angle or update the existing post" if best >= OVERLAP else
-               "SAFE - no close match found")
-    print(f"Topic:   {args.topic}\nVerdict: {verdict}\n")
+    print(f"Topic: {args.topic}")
+    print("Shortlist by word overlap only. The score is NOT a cannibalization verdict:")
+    print("judge each candidate on keyword, topic and intent overlap.\n")
     for score, p in ranked:
         print(f"  {score:.2f}  {p['title'] or p['url']}\n        {p['url']}")
+        if args.details:
+            if p["description"]:
+                print(f"        description: {p['description']}")
+            for h in p["headings"]:
+                print(f"        - {h}")
+        print()
 
 
 def main():
@@ -169,6 +174,7 @@ def main():
     c = sub.add_parser("check", help="check a topic against the index")
     c.add_argument("topic")
     c.add_argument("--top", type=int, default=5)
+    c.add_argument("--details", action="store_true", help="also print each candidate's description and headings")
     c.set_defaults(fn=cmd_check)
     args = ap.parse_args()
     args.fn(args)
